@@ -66,7 +66,8 @@ class ContentNetTFLite:
         self.output_details = self.interpreter.get_output_details()
         
         # Verify input/output shapes
-        expected_input_shape = [1, 3, 256, 256]
+        # Using TensorFlow format: [B, H, W, C]
+        expected_input_shape = [1, 256, 256, 3]
         expected_output_shape = [1, 8, 8, 128]
         
         actual_input_shape = self.input_details[0]['shape'].tolist()
@@ -88,7 +89,7 @@ class ContentNetTFLite:
         """Run inference on video frame.
         
         Args:
-            video_frame: numpy array of shape (batch, 3, 256, 256) in range [-1, 1]
+            video_frame: numpy array of shape (batch, 256, 256, 3) in range [-1, 1]
         
         Returns:
             features: numpy array of shape (batch, 8, 8, 128)
@@ -142,7 +143,8 @@ class DistortionNetTFLite:
         self.output_details = self.interpreter.get_output_details()
         
         # Verify input/output shapes
-        expected_input_shape = [9, 3, 360, 640]
+        # Using TensorFlow format: [B, H, W, C]
+        expected_input_shape = [9, 360, 640, 3]
         expected_output_shape = [1, 24, 24, 128]
         
         actual_input_shape = self.input_details[0]['shape'].tolist()
@@ -164,7 +166,7 @@ class DistortionNetTFLite:
         """Run inference on video patches.
         
         Args:
-            video_patches: numpy array of shape (batch * 9, 3, 360, 640) in range [-1, 1]
+            video_patches: numpy array of shape (batch * 9, 360, 640, 3) in range [-1, 1]
         
         Returns:
             features: numpy array of shape (batch, 24, 24, 128)
@@ -342,15 +344,14 @@ class UVQ1p5TFLite:
             frame: numpy array of shape (height, width, 3) in range [-1, 1]
         
         Returns:
-            preprocessed: numpy array of shape (1, 3, 256, 256)
+            preprocessed: numpy array of shape (1, 256, 256, 3) in [B, H, W, C] format
         """
         import cv2
         
         # Resize to 256x256
         frame_256 = cv2.resize(frame, (256, 256), interpolation=cv2.INTER_CUBIC)
         
-        # Transpose to (3, 256, 256) and add batch dimension
-        frame_256 = np.transpose(frame_256, (2, 0, 1))
+        # Add batch dimension (no transpose needed - already in H, W, C format)
         frame_256 = np.expand_dims(frame_256, axis=0)
         
         return frame_256.astype(np.float32)
@@ -362,15 +363,14 @@ class UVQ1p5TFLite:
             frame: numpy array of shape (1080, 1920, 3) in range [-1, 1]
         
         Returns:
-            patches: numpy array of shape (9, 3, 360, 640)
+            patches: numpy array of shape (9, 360, 640, 3) in [B, H, W, C] format
         """
-        # Split into 3x3 patches of 640x360
+        # Split into 3x3 patches of 360x640
         patches = []
         for i in range(3):
             for j in range(3):
+                # Extract patch (already in H, W, C format - no transpose needed)
                 patch = frame[i*360:(i+1)*360, j*640:(j+1)*640, :]
-                # Transpose to (3, 360, 640)
-                patch = np.transpose(patch, (2, 0, 1))
                 patches.append(patch)
         
         # Stack patches

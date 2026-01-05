@@ -110,12 +110,12 @@ Location: `../models/tflite_models/uvq1.5/`
 ## Model Specifications
 
 ### ContentNet
-- **Input:** (1, 3, 256, 256) - RGB frames resized to 256×256
+- **Input:** (1, 256, 256, 3) - RGB frames resized to 256×256 in [B, H, W, C] format
 - **Output:** (1, 8, 8, 128) - Content feature maps
 - **Purpose:** Extract semantic content features
 
 ### DistortionNet
-- **Input:** (9, 3, 360, 640) - 9 patches per frame (3×3 grid from 1080p)
+- **Input:** (9, 360, 640, 3) - 9 patches per frame (3×3 grid from 1080p) in [B, H, W, C] format
 - **Output:** (1, 24, 24, 128) - Distortion feature maps
 - **Purpose:** Detect visual distortions using patch-based processing
 
@@ -141,9 +141,9 @@ frame_256 = cv2.resize(frame, (256, 256), interpolation=cv2.INTER_CUBIC)
 # Normalize to [-1, 1]
 frame_normalized = (frame_256 / 255.0 - 0.5) * 2
 
-# Transpose to (3, 256, 256) and add batch dimension
-frame_input = np.transpose(frame_normalized, (2, 0, 1))
-frame_input = np.expand_dims(frame_input, axis=0)
+# Add batch dimension (already in H, W, C format - no transpose needed)
+frame_input = np.expand_dims(frame_normalized, axis=0)
+# Shape: (1, 256, 256, 3) in [B, H, W, C] format
 ```
 
 ### For DistortionNet (9 patches from 1080p)
@@ -157,11 +157,10 @@ for i in range(3):
         patch = frame[i*360:(i+1)*360, j*640:(j+1)*640]
         # Normalize to [-1, 1]
         patch_normalized = (patch / 255.0 - 0.5) * 2
-        # Transpose to (3, 360, 640)
-        patch_input = np.transpose(patch_normalized, (2, 0, 1))
-        patches.append(patch_input)
+        # Already in H, W, C format - no transpose needed
+        patches.append(patch_normalized)
 
-# Stack patches: (9, 3, 360, 640)
+# Stack patches: (9, 360, 640, 3) in [B, H, W, C] format
 patches_input = np.stack(patches, axis=0)
 ```
 

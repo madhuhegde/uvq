@@ -23,6 +23,12 @@ Comprehensive documentation for UVQ 1.5 TFLite conversion, INT8 quantization, an
 | **[quantization.md](./quantization.md)** | INT8 quantization details and process |
 | **[model-inventory.md](./model-inventory.md)** | Model file inventory and locations |
 
+### Input Format Migration
+
+| File | Description |
+|:-----|:------------|
+| **[input-format-migration.md](./input-format-migration.md)** | Complete input format migration guide ([B, C, H, W] → [B, H, W, C]) with rationale, changes, test results, and benefits |
+
 ---
 
 ## 🎯 Quick Results
@@ -53,6 +59,10 @@ Comprehensive documentation for UVQ 1.5 TFLite conversion, INT8 quantization, an
 1. [performance.md](./performance.md) - comprehensive performance analysis
 2. [quantization.md](./quantization.md) - INT8 quantization details
 3. [results-summary.md](./results-summary.md) - presentation tables
+
+### Understanding Input Format Changes?
+1. [input-format-migration.md](./input-format-migration.md) - complete migration guide with rationale and results
+2. [implementation.md](./implementation.md) - updated preprocessing code examples
 
 ---
 
@@ -161,6 +171,16 @@ results = model.infer(
 - Model sizes
 - Conversion scripts
 - Documentation links
+
+**[input-format-migration.md](./input-format-migration.md)**
+- Rationale for input format change
+- Complete migration summary
+- All files modified
+- Code before/after comparisons
+- Test results with new format
+- Performance benefits
+- Verification checklist
+- Deployment considerations
 
 ---
 
