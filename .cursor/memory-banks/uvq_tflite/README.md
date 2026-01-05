@@ -28,6 +28,7 @@ Comprehensive documentation for UVQ 1.5 TFLite conversion, INT8 quantization, an
 | File | Description |
 |:-----|:------------|
 | **[input-format-migration.md](./input-format-migration.md)** | Complete input format migration guide ([B, C, H, W] → [B, H, W, C]) with rationale, changes, test results, and benefits |
+| **[gathernd-fix.md](./gathernd-fix.md)** | Fix for GatherNd operator issue - using `.contiguous()` after `permute()` |
 
 ---
 
