@@ -163,8 +163,29 @@ class ContentNet(nn.Module):
     self.model.load_state_dict(model)
     return model
 
-  def predict_and_get_features(self, frame):
-    features = self.model(frame)
+  def predict_and_get_features(self, frame, batch_size=32):
+    """Process frames in batches to avoid OOM.
+    
+    Args:
+        frame: Tensor of frames to process
+        batch_size: Number of frames to process at once
+    
+    Returns:
+        features: Concatenated features from all frames
+    """
+    num_frames = frame.shape[0]
+    if num_frames <= batch_size:
+      features = self.model(frame)
+      return features.permute(*self.features_transpose)
+    
+    # Process in batches
+    feature_list = []
+    for i in range(0, num_frames, batch_size):
+      batch = frame[i : i + batch_size]
+      batch_features = self.model(batch)
+      feature_list.append(batch_features)
+    
+    features = torch.cat(feature_list, dim=0)
     return features.permute(*self.features_transpose)
 
   def forward(self, video):
@@ -183,5 +204,5 @@ class ContentNet(nn.Module):
     performed only on the first frame of each second.
     """
     input_video = video[:, 0]
-    feature = self.predict_and_get_features(input_video)
+    feature = self.predict_and_get_features(input_video, batch_size=32)
     return feature

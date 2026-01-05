@@ -319,8 +319,29 @@ class DistortionNet(nn.Module):
     self.model.load_state_dict(model)
     return model
 
-  def predict_and_get_features(self, frame):
-    features = self.model(frame)
+  def predict_and_get_features(self, frame, batch_size=32):
+    """Process patches in batches to avoid OOM.
+    
+    Args:
+        frame: Tensor of patches to process
+        batch_size: Number of patches to process at once
+    
+    Returns:
+        features: Concatenated features from all patches
+    """
+    num_patches = frame.shape[0]
+    if num_patches <= batch_size:
+      features = self.model(frame)
+      return features
+    
+    # Process in batches
+    feature_list = []
+    for i in range(0, num_patches, batch_size):
+      batch = frame[i : i + batch_size]
+      batch_features = self.model(batch)
+      feature_list.append(batch_features)
+    
+    features = torch.cat(feature_list, dim=0)
     return features
 
   def forward(self, video):
@@ -360,8 +381,8 @@ class DistortionNet(nn.Module):
         -1, c, self.patch_height, self.patch_width
     )
 
-    # Batch prediction
-    batch_features = self.predict_and_get_features(batched_patches)
+    # Batch prediction with batching to avoid OOM
+    batch_features = self.predict_and_get_features(batched_patches, batch_size=32)
 
     # Reshape features into spatial grid
     feature = batch_features.reshape(
