@@ -1,234 +1,142 @@
-# UVQ 1.5 TFLite Conversion & Quantization
+# UVQ TFLite Models - Documentation
 
-Comprehensive documentation for UVQ 1.5 TFLite conversion, INT8 quantization, and performance analysis.
+## Quick Start
 
----
+This memory bank contains comprehensive documentation for UVQ (Universal Video Quality) TFLite models optimized for BSTM hardware deployment.
 
-## 📚 Documentation Structure
+## Documentation Structure
 
-### Core Documentation
+### 📖 [Overview](./overview.md)
+**Start here** - High-level introduction to UVQ TFLite models, key components, and BSTM hardware compatibility.
 
-| File | Description |
-|:-----|:------------|
-| **[overview.md](./overview.md)** | Project overview and architecture |
-| **[implementation.md](./implementation.md)** | Complete implementation guide (PyTorch vs TFLite) |
-| **[usage.md](./usage.md)** | How to use the models and comparison tools |
-
-### Analysis & Results
-
-| File | Description |
-|:-----|:------------|
-| **[results-summary.md](./results-summary.md)** | Presentation-ready tables (Performance, Accuracy, Model Size) |
-| **[performance.md](./performance.md)** | Comprehensive performance analysis |
-| **[quantization.md](./quantization.md)** | INT8 quantization details and process |
-| **[model-inventory.md](./model-inventory.md)** | Model file inventory and locations |
-
-### Input Format Migration
-
-| File | Description |
-|:-----|:------------|
-| **[input-format-migration.md](./input-format-migration.md)** | Complete input format migration guide ([B, C, H, W] → [B, H, W, C]) with rationale, changes, test results, and benefits |
-| **[gathernd-fix.md](./gathernd-fix.md)** | Fix for GatherNd operator issue - using `.contiguous()` after `permute()` |
+**Topics covered**:
+- What is UVQ TFLite?
+- Model variants (FLOAT32 vs INT8)
+- BSTM hardware requirements
+- Key innovation: 4D aggregation
 
 ---
 
-## 🎯 Quick Results
+### 🔧 [4D Aggregation](./4d-aggregation.md)
+**Technical deep-dive** - Detailed explanation of the pure 4D patch aggregation strategy that makes models BSTM-compatible.
 
-| Metric | FLOAT32 | INT8 | Improvement |
-|:-------|--------:|-----:|:-----------:|
-| **Model Size** | 29.38 MB | 8.63 MB | **70.6% smaller** |
-| **Inference Speed** | 15.235s | 11.750s | **1.30x faster** |
-| **Quality Score Diff** | Baseline | 2.44% | **Excellent** |
-
-### ✅ Recommendation: Deploy INT8 models for production
-
----
-
-## 📖 Reading Guide
-
-### New to the Project?
-1. Start with [overview.md](./overview.md) - understand the architecture
-2. Check [results-summary.md](./results-summary.md) - see key metrics
-3. Read [usage.md](./usage.md) - learn how to use the models
-
-### Want to Implement?
-1. Read [implementation.md](./implementation.md) - complete implementation guide
-2. Check [usage.md](./usage.md) - how to run comparisons
-3. Review [model-inventory.md](./model-inventory.md) - model file locations
-
-### Need Detailed Analysis?
-1. [performance.md](./performance.md) - comprehensive performance analysis
-2. [quantization.md](./quantization.md) - INT8 quantization details
-3. [results-summary.md](./results-summary.md) - presentation tables
-
-### Understanding Input Format Changes?
-1. [input-format-migration.md](./input-format-migration.md) - complete migration guide with rationale and results
-2. [implementation.md](./implementation.md) - updated preprocessing code examples
+**Topics covered**:
+- Problem: 6D tensor incompatibility
+- Solution: Pure 4D aggregation approach
+- How it works (with visual diagrams)
+- Implementation details
+- Verification results
 
 ---
 
-## 🔗 Related Resources
+### 💻 [Usage Guide](./usage.md)
+**How to use the models** - Practical guide for loading and running TFLite models in your application.
 
-### Implementation Files
-- **Comparison Script:** `compare_tflite_performance.py`
-- **Test Script:** `test_tflite_inference.py`
-- **TFLite Implementation:** `uvq1p5_pytorch/utils/uvq1p5_tflite.py`
-- **PyTorch Implementation:** `uvq1p5_pytorch/utils/uvq1p5.py`
-
-### Model Locations
-- **PyTorch Models:** `~/work/models/UVQ/uvq1.5/`
-- **TFLite Models:** `models/tflite_models/uvq1.5/`
-
-### Conversion Scripts
-- **Location:** `~/work/ai_edge_torch/ai-edge-torch/ai_edge_torch/generative/examples/uvq1.5/`
-- **FLOAT32 Conversion:** `convert_to_tflite.py`
-- **INT8 Conversion:** `convert_to_tflite_int8.py`
-- **Verification:** `verify_int8_models.py`
+**Topics covered**:
+- Model selection (FLOAT32 vs INT8)
+- Python usage examples
+- Input/output formats
+- Performance tips
+- Complete inference pipeline
 
 ---
 
-## 🛠️ Quick Commands
+### 🔄 [Conversion Pipeline](./conversion.md)
+**How to convert models** - Step-by-step guide for converting PyTorch models to TFLite format.
 
-### Run Performance Comparison
+**Topics covered**:
+- Environment setup
+- FLOAT32 conversion
+- INT8 quantization
+- Key implementation details
+- Ensuring BSTM compatibility
+
+---
+
+### ✅ [Verification](./verification.md)
+**Testing and validation** - Comprehensive verification process to ensure model quality and compatibility.
+
+**Topics covered**:
+- Verification results (FLOAT32 and INT8)
+- BSTM hardware compatibility checklist
+- Manual verification process
+- Acceptance criteria
+- 4D aggregation verification
+
+---
+
+### 🔍 [Troubleshooting](./troubleshooting.md)
+**Common issues and solutions** - Debug guide for conversion, runtime, and compatibility issues.
+
+**Topics covered**:
+- Conversion issues (size mismatch, GATHER_ND, 6D tensors)
+- Runtime issues (input shape, model not found)
+- Model quality issues (INT8 error, model size)
+- Hardware compatibility issues
+- Debugging workflow
+
+---
+
+## Quick Reference
+
+### Model Files
+
+All models located in: `~/work/UVQ/uvq/models/tflite_models/uvq1.5/`
+
+| Model | Size | Correlation | Use Case |
+|-------|------|-------------|----------|
+| `distortion_net.tflite` | 14.53 MB | 1.000000 | Maximum accuracy |
+| `distortion_net_int8.tflite` | 4.25 MB | 0.979218 | Production (70% smaller) |
+
+### Key Commands
+
 ```bash
-source ~/work/UVQ/uvq_env/bin/activate
-cd ~/work/UVQ/uvq
-python compare_tflite_performance.py ../dataset/Gaming_360P_local.mp4 --fps 1 --iterations 5
+# Convert to FLOAT32
+python convert_to_tflite.py --model distortion --output_dir ~/work/UVQ/uvq/models/tflite_models/uvq1.5
+
+# Convert to INT8
+python convert_to_tflite_int8.py --model distortion --output_dir ~/work/UVQ/uvq/models/tflite_models/uvq1.5
+
+# Verify models
+python compare_distortionnet_all.py
+
+# Check for GATHER_ND
+python -c "
+with open('distortion_net.tflite', 'rb') as f:
+    print('✅ No GATHER_ND' if b'GATHER_ND' not in f.read() else '❌ GATHER_ND found')
+"
 ```
 
-### Test TFLite Inference
-```bash
-python test_tflite_inference.py video.mp4 --compare
-```
+### BSTM Hardware Requirements
 
-### Check Model Sizes
-```bash
-ls -lh models/tflite_models/uvq1.5/
-```
+✅ **No GATHER_ND operators** - Verified in both models  
+✅ **All tensors ≤ 4D** - Pure 4D aggregation  
+✅ **NHWC format** - TensorFlow/TFLite standard  
+✅ **Contiguous memory** - Optimized layout  
 
-### Use INT8 Models in Code
-```python
-from uvq1p5_pytorch.utils.uvq1p5_tflite import UVQ1p5TFLite
+### Model I/O
 
-# Load INT8 quantized models
-model = UVQ1p5TFLite(use_quantized=True)
+**Input**: `[9, 360, 640, 3]` (9 patches, 360×640 RGB, NHWC)  
+**Output**: `[1, 24, 24, 128]` (aggregated features, NHWC)
 
-# Run inference
-results = model.infer(
-    video_filename='video.mp4',
-    video_length=10,
-    transpose=False,
-    fps=1
-)
-```
+## Navigation
 
----
+- **New to UVQ TFLite?** → Start with [Overview](./overview.md)
+- **Want to use models?** → See [Usage Guide](./usage.md)
+- **Need to convert models?** → See [Conversion Pipeline](./conversion.md)
+- **Verifying model quality?** → See [Verification](./verification.md)
+- **Encountering issues?** → See [Troubleshooting](./troubleshooting.md)
+- **Understanding 4D aggregation?** → See [4D Aggregation](./4d-aggregation.md)
 
-## 📊 Documentation Summary
+## Status
 
-### What Each File Contains
-
-**[overview.md](./overview.md)**
-- Project introduction
-- UVQ 1.5 architecture
-- Key results summary
-- Quick links
-
-**[implementation.md](./implementation.md)**
-- PyTorch vs TFLite implementations
-- Model specifications
-- Preprocessing details
-- Code examples
-- Deployment guides
-
-**[usage.md](./usage.md)**
-- Command-line options
-- Usage examples
-- Troubleshooting
-- Integration guide
-
-**[performance.md](./performance.md)**
-- Detailed performance metrics
-- Inference time analysis
-- Accuracy comparison
-- Hardware expectations
-- ROI analysis
-
-**[quantization.md](./quantization.md)**
-- Quantization configuration
-- FLOAT32 vs INT8 comparison
-- Accuracy impact analysis
-- Conversion process
-- Alternative options
-
-**[results-summary.md](./results-summary.md)**
-- Performance table (speed)
-- Accuracy table
-- Model size table
-- Presentation-ready format
-
-**[model-inventory.md](./model-inventory.md)**
-- File locations
-- Model sizes
-- Conversion scripts
-- Documentation links
-
-**[input-format-migration.md](./input-format-migration.md)**
-- Rationale for input format change
-- Complete migration summary
-- All files modified
-- Code before/after comparisons
-- Test results with new format
-- Performance benefits
-- Verification checklist
-- Deployment considerations
+✅ **Production Ready**  
+✅ **BSTM HW Compatible**  
+✅ **Fully Verified**  
+✅ **Documented**  
 
 ---
 
-## 🎓 Key Concepts
-
-### UVQ 1.5 Architecture
-- **ContentNet:** Extracts semantic content features (256×256 input)
-- **DistortionNet:** Detects distortions via patches (3×3 grid, 360×640 patches)
-- **AggregationNet:** Combines features → quality score [1-5]
-
-### Quantization Types
-- **FLOAT32:** Full precision, 29.38 MB, baseline accuracy
-- **INT8:** Dynamic quantization, 8.63 MB, 2.44% accuracy difference
-
-### Performance Metrics
-- **Speedup:** 1.30x faster with INT8
-- **Size Reduction:** 70.6% smaller with INT8
-- **Accuracy:** 2.44% difference (excellent)
-
----
-
-## 📝 Document Conventions
-
-Following the [documentation rules](./../rules/documentation.mdc):
-
-- ✅ Kebab-case file names (`overview.md`, `performance.md`)
-- ✅ Markdown format for all documentation
-- ✅ Clear structure with tables and sections
-- ✅ Cross-references between related files
-- ✅ Code examples with syntax highlighting
-- ✅ Organized in dedicated memory bank folder
-
----
-
-## 🚀 Project Status
-
-**Status:** ✅ **Production Ready**
-
-- ✅ FLOAT32 models converted and tested
-- ✅ INT8 models quantized and validated
-- ✅ Performance benchmarks completed
-- ✅ Accuracy verified (2.44% difference)
-- ✅ Documentation complete
-- ✅ Deployment-ready
-
----
-
-**Last Updated:** January 5, 2026  
-**Project:** UVQ 1.5 TFLite Conversion & INT8 Quantization  
-**Recommendation:** Deploy INT8 models for production use
+**Last Updated**: January 6, 2025  
+**Version**: UVQ 1.5 with 4D Aggregation  
+**Models**: DistortionNet FLOAT32 & INT8

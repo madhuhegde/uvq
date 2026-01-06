@@ -1,85 +1,69 @@
-# UVQ 1.5 TFLite Conversion - Overview
+# UVQ TFLite Models - Overview
 
-## What is UVQ 1.5?
+## What is UVQ TFLite?
 
-UVQ (Universal Video Quality) 1.5 is a neural network-based video quality assessment model that predicts perceptual quality scores for videos on a scale of 1-5.
+UVQ (Universal Video Quality) TFLite models are TensorFlow Lite conversions of PyTorch-based video quality assessment models, specifically optimized for BSTM hardware deployment.
 
-### Architecture
+## Key Components
 
-UVQ 1.5 consists of three neural networks:
+### DistortionNet
+- **Purpose**: Detects visual distortions in video frames
+- **Architecture**: EfficientNet-B0 backbone with depthwise separable convolutions
+- **Input**: 9 patches (3×3 grid) of 360×640 RGB images in NHWC format
+- **Output**: Aggregated feature map of shape [1, 24, 24, 128]
 
-1. **ContentNet** - Extracts semantic content features from video frames
-   - Input: (1, 3, 256, 256) RGB frames
-   - Output: (1, 8, 8, 128) content feature maps
+### ContentNet
+- **Purpose**: Analyzes content characteristics of video frames
+- **Input**: 256×256 RGB images in NHWC format
+- **Output**: Content features for quality assessment
 
-2. **DistortionNet** - Detects visual distortions using patch-based processing
-   - Input: (9, 3, 360, 640) - 9 patches per frame (3×3 grid)
-   - Output: (1, 24, 24, 128) distortion feature maps
+### AggregationNet
+- **Purpose**: Combines distortion and content features to produce final quality scores
+- **Input**: Features from DistortionNet and ContentNet
+- **Output**: Video quality metrics
 
-3. **AggregationNet** - Combines features to produce final quality scores
-   - Inputs: Content + Distortion features
-   - Output: (1, 1) quality score [1-5]
+## Model Variants
 
-## TFLite Conversion Project
+### FLOAT32 Models
+- Full precision (32-bit floating point)
+- Maximum accuracy
+- Larger file size (~14.53 MB for DistortionNet)
+- Perfect match with PyTorch reference (correlation: 1.000000)
 
-This project successfully converted UVQ 1.5 from PyTorch to TensorFlow Lite with two variants:
+### INT8 Models
+- Quantized (8-bit integer)
+- 70% smaller file size (~4.25 MB for DistortionNet)
+- Faster inference on hardware
+- Good accuracy (correlation: >0.97 with PyTorch)
+- Expected quantization error within acceptable range
 
-### FLOAT32 Models (Baseline)
-- Full precision conversion from PyTorch
-- Model size: 29.38 MB total
-- Preserves maximum accuracy
-- Suitable for server/desktop deployment
+## BSTM Hardware Compatibility
 
-### INT8 Quantized Models (Optimized)
-- Dynamic INT8 quantization applied
-- Model size: 8.63 MB total (**70.6% smaller**)
-- Inference speed: **1.30x faster**
-- Accuracy: 2.44% difference (excellent)
-- Ideal for mobile/edge deployment
+All models are optimized for BSTM hardware with the following constraints:
 
-## Key Results
+✅ **Maximum 4D tensors** - No 5D or 6D tensors allowed  
+✅ **No GATHER_ND operators** - Inefficient operators eliminated  
+✅ **NHWC format** - TensorFlow/TFLite standard format  
+✅ **Contiguous memory layout** - Optimized for hardware execution  
 
-| Metric | FLOAT32 | INT8 | Improvement |
-|:-------|--------:|-----:|:-----------:|
-| **Model Size** | 29.38 MB | 8.63 MB | **70.6% smaller** |
-| **Inference Speed** | 15.235s | 11.750s | **1.30x faster** |
-| **Quality Score** | 3.0440 | 3.1185 | **2.44% diff** |
+## Key Innovation: 4D Aggregation
 
-## Recommendation
+The critical innovation is the **pure 4D patch aggregation** strategy that:
+- Converts 9 patches (3×3 grid) into a single spatial grid
+- Uses only reshape and permute operations (no 5D/6D tensors)
+- Produces identical output to the original 6D approach
+- Fully compatible with BSTM hardware constraints
 
-✅ **Deploy INT8 models for production**
+## Model Locations
 
-The INT8 quantized models provide excellent balance:
-- Significant size reduction (70.6%)
-- Better performance (1.30x speedup)
-- Minimal accuracy impact (2.44%)
-- Lower memory footprint
-- Faster model loading
-
-## Project Structure
-
+All TFLite models are located in:
 ```
-.cursor/memory-banks/uvq_tflite/
-├── overview.md              # This file - project overview
-├── implementation.md        # Complete implementation guide
-├── usage.md                 # How to use the models
-├── performance.md           # Performance analysis
-├── quantization.md          # Quantization details
-├── results-summary.md       # Presentation-ready tables
-└── model-inventory.md       # Model file inventory
+~/work/UVQ/uvq/models/tflite_models/uvq1.5/
 ```
-
-## Quick Links
-
-- **Getting Started:** See [usage.md](./usage.md)
-- **Implementation Details:** See [implementation.md](./implementation.md)
-- **Performance Data:** See [performance.md](./performance.md)
-- **Quantization Info:** See [quantization.md](./quantization.md)
-- **Results Tables:** See [results-summary.md](./results-summary.md)
 
 ## See Also
 
-- Main README: `~/work/UVQ/uvq/README.md`
-- PyTorch Implementation: `uvq1p5_pytorch/utils/uvq1p5.py`
-- TFLite Implementation: `uvq1p5_pytorch/utils/uvq1p5_tflite.py`
-- Comparison Script: `compare_tflite_performance.py`
+- [4D Aggregation Implementation](./4d-aggregation.md) - Technical details of the aggregation strategy
+- [Model Usage](./usage.md) - How to use the TFLite models
+- [Conversion Pipeline](./conversion.md) - How models are converted from PyTorch
+- [Verification](./verification.md) - Testing and validation results

@@ -1,192 +1,227 @@
-# TFLite Performance Comparison Script
+# UVQ TFLite Models - Usage Guide
 
-Quick guide for using `compare_tflite_performance.py` to compare FLOAT32 and INT8 quantized TFLite models.
+## Model Selection
 
-## Quick Start
+### FLOAT32 vs INT8
 
-```bash
-# Activate environment
-source ~/work/UVQ/uvq_env/bin/activate
+Choose the appropriate model based on your requirements:
 
-# Basic comparison
-cd ~/work/UVQ/uvq
-python compare_tflite_performance.py /path/to/video.mp4
+| Criterion | FLOAT32 | INT8 |
+|-----------|---------|------|
+| **Accuracy** | Maximum (correlation: 1.000000) | Good (correlation: 0.979218) |
+| **File Size** | 14.53 MB | 4.25 MB (70% smaller) |
+| **Inference Speed** | Standard | Faster (INT8 operations) |
+| **Use Case** | Maximum accuracy required | Size/speed critical |
 
-# With custom settings
-python compare_tflite_performance.py /path/to/video.mp4 --fps 2 --iterations 5
-```
+**Recommendation**:
+- Use **FLOAT32** (`distortion_net.tflite`) for development and validation
+- Use **INT8** (`distortion_net_int8.tflite`) for production deployment
 
-## Command-Line Options
+## Python Usage
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `video_path` | Path to input video (required) | - |
-| `--fps N` | Frames per second to sample | 1 |
-| `--video_length N` | Video length in seconds | Auto-detected |
-| `--iterations N` | Number of inference runs | 3 |
-| `--skip_float32` | Skip FLOAT32 inference | False |
-| `--skip_int8` | Skip INT8 inference | False |
-
-## Examples
-
-### Basic Comparison
-```bash
-python compare_tflite_performance.py video.mp4
-```
-
-### High-Frequency Sampling
-```bash
-python compare_tflite_performance.py video.mp4 --fps 5
-```
-
-### Multiple Iterations for Accuracy
-```bash
-python compare_tflite_performance.py video.mp4 --iterations 10
-```
-
-### Test Only INT8 Model
-```bash
-python compare_tflite_performance.py video.mp4 --skip_float32
-```
-
-### Manual Video Length
-```bash
-python compare_tflite_performance.py video.mp4 --video_length 30
-```
-
-## Output
-
-The script provides:
-
-1. **Model Information**
-   - Model sizes (FLOAT32 vs INT8)
-   - Size reduction percentage
-
-2. **Performance Metrics**
-   - Inference time per iteration
-   - Average inference time
-   - Standard deviation
-   - Speedup factor
-   - Time saved percentage
-
-3. **Accuracy Metrics**
-   - Overall quality score comparison
-   - Per-frame score differences (mean, max, std)
-   - Absolute and relative differences
-
-4. **Recommendation**
-   - Clear guidance on which model to use
-   - Based on accuracy and performance trade-offs
-
-## Sample Output
-
-```
-================================================================================
-UVQ 1.5 TFLite Performance Comparison: FLOAT32 vs INT8
-================================================================================
-
-Video: Gaming_360P_local.mp4
-Video duration: 19s (auto-detected)
-Video FPS: 30.00
-Sampling FPS: 1
-Iterations: 2
-
-Model sizes:
-  FLOAT32: 29.38 MB
-  INT8:    8.63 MB (70.6% reduction)
-
-...
-
-Summary
-================================================================================
-
-Accuracy: ✓ Excellent
-  Overall score difference: 2.44%
-  Mean per-frame difference: 2.85%
-
-Performance: ✓ Faster
-  Speedup: 1.30x
-  INT8 time: 11.750s
-
-Model Size: ✓ 70.6% smaller
-  INT8 total: 8.63 MB
-
-Recommendation:
-  ✓ Use INT8 models for production deployment
-    - Excellent accuracy preservation
-    - Better or equal performance
-    - Significantly smaller model size
-```
-
-## Requirements
-
-- Python 3.x
-- TensorFlow 2.18+
-- OpenCV (cv2)
-- NumPy
-- ffmpeg and ffprobe (for video processing)
-
-## Troubleshooting
-
-### Video duration not detected
-```bash
-# Manually specify video length
-python compare_tflite_performance.py video.mp4 --video_length 30
-```
-
-### Out of memory
-```bash
-# Reduce sampling rate
-python compare_tflite_performance.py video.mp4 --fps 1
-```
-
-### Models not found
-```bash
-# Check models exist
-ls -lh ~/work/UVQ/uvq/models/tflite_models/uvq1.5/
-```
-
-## Integration
-
-Use the modified `UVQ1p5TFLite` class in your code:
+### Basic Example
 
 ```python
-from uvq1p5_pytorch.utils.uvq1p5_tflite import UVQ1p5TFLite
+import numpy as np
+import tensorflow as tf
 
-# Use INT8 quantized models
-model = UVQ1p5TFLite(use_quantized=True)
+# Load model
+interpreter = tf.lite.Interpreter(model_path="distortion_net.tflite")
+interpreter.allocate_tensors()
 
-# Or use FLOAT32 models
-model = UVQ1p5TFLite(use_quantized=False)
+# Get input/output details
+input_details = interpreter.get_input_details()
+output_details = interpreter.get_output_details()
 
-# Run inference (same API for both)
-results = model.infer(
-    video_filename='video.mp4',
-    video_length=10,
-    transpose=False,
-    fps=1
-)
+# Prepare input: 9 patches of 360×640 RGB (NHWC format)
+video_patches = np.random.randn(9, 360, 640, 3).astype(np.float32)
+
+# Run inference
+interpreter.set_tensor(input_details[0]['index'], video_patches)
+interpreter.invoke()
+features = interpreter.get_tensor(output_details[0]['index'])
+
+# Output shape: [1, 24, 24, 128]
+print(f"Output shape: {features.shape}")
 ```
+
+### Complete Pipeline
+
+```python
+import numpy as np
+import tensorflow as tf
+from pathlib import Path
+
+class DistortionNetInference:
+    """Wrapper for DistortionNet TFLite inference."""
+    
+    def __init__(self, model_path, use_int8=False):
+        """
+        Args:
+            model_path: Path to TFLite model directory
+            use_int8: If True, use INT8 model; otherwise use FLOAT32
+        """
+        model_name = "distortion_net_int8.tflite" if use_int8 else "distortion_net.tflite"
+        full_path = Path(model_path) / model_name
+        
+        self.interpreter = tf.lite.Interpreter(model_path=str(full_path))
+        self.interpreter.allocate_tensors()
+        
+        self.input_details = self.interpreter.get_input_details()
+        self.output_details = self.interpreter.get_output_details()
+        
+        print(f"Loaded model: {model_name}")
+        print(f"Input shape:  {self.input_details[0]['shape']}")
+        print(f"Output shape: {self.output_details[0]['shape']}")
+    
+    def preprocess_patches(self, patches):
+        """
+        Preprocess video patches for inference.
+        
+        Args:
+            patches: numpy array of shape [9, 360, 640, 3]
+                     Values should be in a reasonable range (e.g., [-1, 1] or [0, 255])
+        
+        Returns:
+            Preprocessed patches ready for inference
+        """
+        # Ensure correct shape
+        assert patches.shape == (9, 360, 640, 3), f"Expected shape (9, 360, 640, 3), got {patches.shape}"
+        
+        # Convert to float32
+        patches = patches.astype(np.float32)
+        
+        # Normalize if needed (depends on your input data)
+        # Example: if input is [0, 255], normalize to [-1, 1]
+        # patches = (patches / 127.5) - 1.0
+        
+        return patches
+    
+    def run_inference(self, patches):
+        """
+        Run inference on video patches.
+        
+        Args:
+            patches: numpy array of shape [9, 360, 640, 3]
+        
+        Returns:
+            features: numpy array of shape [1, 24, 24, 128]
+        """
+        # Preprocess
+        patches = self.preprocess_patches(patches)
+        
+        # Run inference
+        self.interpreter.set_tensor(self.input_details[0]['index'], patches)
+        self.interpreter.invoke()
+        features = self.interpreter.get_tensor(self.output_details[0]['index'])
+        
+        return features
+
+# Example usage
+if __name__ == '__main__':
+    # Initialize inference
+    model_path = "~/work/UVQ/uvq/models/tflite_models/uvq1.5"
+    distortion_net = DistortionNetInference(model_path, use_int8=False)
+    
+    # Create sample input (9 patches)
+    video_patches = np.random.randn(9, 360, 640, 3).astype(np.float32)
+    
+    # Run inference
+    features = distortion_net.run_inference(video_patches)
+    
+    print(f"Input shape:  {video_patches.shape}")
+    print(f"Output shape: {features.shape}")
+    print(f"Output range: [{features.min():.4f}, {features.max():.4f}]")
+```
+
+## Input Format
+
+### DistortionNet
+
+**Shape**: `[9, 360, 640, 3]`
+
+- **Batch dimension**: 9 patches (3×3 grid from a single frame)
+- **Height**: 360 pixels
+- **Width**: 640 pixels
+- **Channels**: 3 (RGB)
+- **Format**: NHWC (TensorFlow standard)
+
+**Patch Layout**:
+```
+Frame divided into 3×3 grid:
+┌─────┬─────┬─────┐
+│  0  │  1  │  2  │
+├─────┼─────┼─────┤
+│  3  │  4  │  5  │
+├─────┼─────┼─────┤
+│  6  │  7  │  8  │
+└─────┴─────┴─────┘
+
+Each patch: 360×640×3
+```
+
+**Value Range**: Typically normalized to `[-1, 1]` or `[0, 1]` depending on preprocessing
+
+## Output Format
+
+### DistortionNet
+
+**Shape**: `[1, 24, 24, 128]`
+
+- **Batch dimension**: 1 (aggregated from 9 patches)
+- **Height**: 24 (3 patches × 8 pixels each)
+- **Width**: 24 (3 patches × 8 pixels each)
+- **Channels**: 128 (feature channels)
+- **Format**: NHWC (TensorFlow standard)
 
 ## Performance Tips
 
-1. **Use multiple iterations** (--iterations 5) for more accurate timing
-2. **Test with representative videos** from your dataset
-3. **Consider different FPS settings** to match your use case
-4. **Run on target hardware** for realistic performance metrics
+### 1. Batch Processing
+```python
+# Process multiple frames efficiently
+frames = [frame1, frame2, frame3, ...]  # List of frames
 
-## Related Documentation
+for frame in frames:
+    patches = extract_patches(frame)  # Extract 9 patches
+    features = distortion_net.run_inference(patches)
+    # Process features...
+```
 
-- **Performance Results:** `TFLITE_PERFORMANCE_COMPARISON.md`
-- **Quantization Details:** `INT8_QUANTIZATION_SUMMARY.md`
-- **Model Inventory:** `TFLITE_MODEL_INVENTORY.txt`
-- **Quantization Analysis:** `QUANTIZATION_ANALYSIS.md`
+### 2. Memory Management
+```python
+# For large-scale processing, clear memory periodically
+import gc
 
-## Support
+for i, frame in enumerate(frames):
+    features = distortion_net.run_inference(extract_patches(frame))
+    # Process features...
+    
+    if i % 100 == 0:
+        gc.collect()  # Clear memory every 100 frames
+```
 
-For issues or questions:
-1. Check model files exist in `models/tflite_models/uvq1.5/`
-2. Verify video file is accessible and valid
-3. Ensure all dependencies are installed
-4. Check TensorFlow version (2.18+ recommended)
+### 3. Use INT8 for Production
+```python
+# INT8 model is 70% smaller and faster
+distortion_net = DistortionNetInference(model_path, use_int8=True)
+```
 
+## Model Locations
+
+All models are located in:
+```
+~/work/UVQ/uvq/models/tflite_models/uvq1.5/
+├── distortion_net.tflite          # FLOAT32 (14.53 MB)
+├── distortion_net_int8.tflite     # INT8 (4.25 MB)
+├── distortion_net_6d.tflite       # Old 6D version (reference only)
+└── distortion_net_int8_6d.tflite  # Old INT8 6D version (reference only)
+```
+
+**Note**: Only use `distortion_net.tflite` and `distortion_net_int8.tflite` for BSTM hardware. The `*_6d.tflite` models are kept for reference only.
+
+## See Also
+
+- [Overview](./overview.md) - General information about UVQ TFLite
+- [Conversion](./conversion.md) - How to convert models from PyTorch
+- [Verification](./verification.md) - Testing and validation
+- [Troubleshooting](./troubleshooting.md) - Common issues and solutions
