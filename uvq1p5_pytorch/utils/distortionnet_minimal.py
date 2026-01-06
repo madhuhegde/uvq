@@ -97,18 +97,29 @@ class DistortionNetSingleBlock(nn.Module):
   """Single MBConv block for debugging - isolates depthwise convolution issue.
   
   This is the absolute minimal model:
-  - Input: 16 channels
-  - MBConv6: 16→24 (with depthwise conv)
+  - Input: 3 RGB channels
+  - Initial Conv: 3→32
+  - MBConv6: 32→24 (with depthwise conv)
   - Output: 24 channels in NHWC format
   """
 
   def __init__(self):
     super().__init__()
     
-    # Just one MBConv6 block
+    # Initial convolution to match input format of minimal/medium models
+    self.initial_conv = custom_nn_layers.Conv2dNormActivationSamePadding(
+        3,
+        32,
+        kernel_size=3,
+        stride=2,
+        activation_layer=nn.SiLU,
+        norm_layer=default_distortionnet_batchnorm2d,
+    )
+    
+    # Single MBConv6 block
     self.block = custom_nn_layers.MBConvSamePadding(
-        16,
-        6,   # expand_ratio (16 * 6 = 96 expanded channels)
+        32,
+        6,   # expand_ratio (32 * 6 = 192 expanded channels)
         24,  # out_channels
         3,   # kernel
         1,   # stride
@@ -120,6 +131,7 @@ class DistortionNetSingleBlock(nn.Module):
     self.permute = custom_nn_layers.PermuteLayerNHWC()
 
   def forward(self, x):
+    x = self.initial_conv(x)
     x = self.block(x)
     x = self.permute(x)
     return x
