@@ -99,7 +99,7 @@ class DistortionNetSingleBlock(nn.Module):
   This is the absolute minimal model:
   - Input: 16 channels
   - MBConv6: 16→24 (with depthwise conv)
-  - Output: 24 channels
+  - Output: 24 channels in NHWC format
   """
 
   def __init__(self):
@@ -115,9 +115,14 @@ class DistortionNetSingleBlock(nn.Module):
         0.0,
         norm_layer=default_distortionnet_batchnorm2d,
     )
+    
+    # Add permute layer to convert to NHWC format for TFLite
+    self.permute = custom_nn_layers.PermuteLayerNHWC()
 
   def forward(self, x):
-    return self.block(x)
+    x = self.block(x)
+    x = self.permute(x)
+    return x
 
 
 class DistortionNetMedium(nn.Module):
