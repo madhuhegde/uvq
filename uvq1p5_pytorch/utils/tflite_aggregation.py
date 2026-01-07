@@ -147,11 +147,12 @@ def aggregate_distortion_rows(row_outputs: list[np.ndarray]) -> np.ndarray:
 
 
 def aggregate_9patch_features(patch_features: np.ndarray) -> np.ndarray:
-    """Aggregate 9 individual patch features into a 3x3 grid using 5D operations.
+    """Aggregate 9 individual patch features into a 3x3 grid using 4D operations.
     
     This function takes 9 individual patch features and aggregates them into a
     single spatial grid matching PyTorch's 3x3 aggregation logic. The aggregation
-    uses 5D operations (no batch dimension) to avoid 6D tensors.
+    uses ONLY 4D operations by splitting into 3 rows and reusing the same logic
+    as the 3-patch model.
     
     Args:
         patch_features: A numpy array of shape (9, 8, 8, 128) representing
@@ -171,30 +172,35 @@ def aggregate_9patch_features(patch_features: np.ndarray) -> np.ndarray:
         (1, 24, 24, 128)
     
     Notes:
-        This aggregation matches PyTorch's 6D logic but uses 5D tensors:
-        - PyTorch: reshape([1,3,3,8,8,128]) -> permute(0,1,3,2,4,5) -> reshape([1,24,24,128])
-        - This:    reshape([3,3,8,8,128]) -> transpose(0,2,1,3,4) -> reshape([1,24,24,128])
+        This aggregation uses ONLY 4D tensors by:
+        1. Splitting 9 patches into 3 rows of 3 patches each
+        2. Aggregating each row horizontally using 4D operations (aggregate_row_patches)
+        3. Concatenating the 3 rows vertically (aggregate_distortion_rows)
         
-        The 5D approach skips the batch dimension since we always process batch=1.
+        This is identical to the 3-patch model's aggregation logic, just applied
+        to pre-computed patch features instead of TFLite model outputs.
     """
     if patch_features.shape != (9, 8, 8, 128):
         raise ValueError(f"Expected input shape (9, 8, 8, 128), but got {patch_features.shape}")
     
-    # Step 1: Reshape [9, 8, 8, 128] -> [3, 3, 8, 8, 128]
-    # Groups into 3 rows of 3 patches: [0,1,2], [3,4,5], [6,7,8]
-    features = patch_features.reshape(3, 3, 8, 8, 128)
+    # Split 9 patches into 3 rows of 3 patches each
+    # Row 1: patches 0, 1, 2 -> [3, 8, 8, 128]
+    # Row 2: patches 3, 4, 5 -> [3, 8, 8, 128]
+    # Row 3: patches 6, 7, 8 -> [3, 8, 8, 128]
+    row1_features = patch_features[0:3]  # [3, 8, 8, 128]
+    row2_features = patch_features[3:6]  # [3, 8, 8, 128]
+    row3_features = patch_features[6:9]  # [3, 8, 8, 128]
     
-    # Step 2: Transpose [3, 3, 8, 8, 128] -> [3, 8, 3, 8, 128]
-    # Interleaves dimensions: [rows, patch_h, cols, patch_w, channels]
-    # This matches PyTorch's permute(0, 1, 3, 2, 4, 5) on 6D tensor
-    features = np.transpose(features, (0, 2, 1, 3, 4))
+    # Aggregate each row horizontally using 4D operations
+    # Each call: [3, 8, 8, 128] -> [1, 8, 24, 128]
+    row1_aggregated = aggregate_row_patches(row1_features)  # [1, 8, 24, 128]
+    row2_aggregated = aggregate_row_patches(row2_features)  # [1, 8, 24, 128]
+    row3_aggregated = aggregate_row_patches(row3_features)  # [1, 8, 24, 128]
     
-    # Step 3: Reshape [3, 8, 3, 8, 128] -> [1, 24, 24, 128]
-    # Flattens the spatial dimensions:
-    # - rows * patch_h = 3 * 8 = 24 (height)
-    # - cols * patch_w = 3 * 8 = 24 (width)
-    features = features.reshape(1, 24, 24, 128)
+    # Aggregate the 3 rows vertically using 4D operations
+    # 3 x [1, 8, 24, 128] -> [1, 24, 24, 128]
+    aggregated_features = aggregate_distortion_rows([row1_aggregated, row2_aggregated, row3_aggregated])
     
-    return features
+    return aggregated_features
 
 
