@@ -121,16 +121,23 @@ class ContentNetTFLite:
 class DistortionNetTFLite:
     """TFLite implementation of DistortionNet."""
     
-    def __init__(self, model_path=None):
+    def __init__(self, model_path=None, use_3patch=False):
         """Initialize DistortionNet TFLite model.
         
         Args:
             model_path: Path to the TFLite model file. If None, uses default path.
+            use_3patch: If True, uses the 3-patch model and performs application-side aggregation.
+                        Otherwise, uses the batch-9 model.
         """
+        self.use_3patch = use_3patch
         if model_path is None:
+            if self.use_3patch:
+                model_name = "distortion_net_3patch.tflite"
+            else:
+                model_name = "distortion_net.tflite"
             model_path = os.path.join(
                 os.path.dirname(__file__), "..", "..", "models",
-                "tflite_models", "uvq1.5", "distortion_net.tflite"
+                "tflite_models", "uvq1.5", model_name
             )
         
         if not os.path.exists(model_path):
@@ -144,8 +151,12 @@ class DistortionNetTFLite:
         
         # Verify input/output shapes
         # Using TensorFlow format: [B, H, W, C]
-        expected_input_shape = [9, 360, 640, 3]
-        expected_output_shape = [1, 24, 24, 128]
+        if self.use_3patch:
+            expected_input_shape = [3, 360, 640, 3]
+            expected_output_shape = [1, 8, 24, 128]
+        else:
+            expected_input_shape = [9, 360, 640, 3]
+            expected_output_shape = [1, 24, 24, 128]
         
         actual_input_shape = self.input_details[0]['shape'].tolist()
         actual_output_shape = self.output_details[0]['shape'].tolist()
@@ -153,13 +164,13 @@ class DistortionNetTFLite:
         if actual_input_shape != expected_input_shape:
             raise ValueError(
                 f"DistortionNet input shape mismatch: expected {expected_input_shape}, "
-                f"got {actual_input_shape}"
+                f"got {actual_input_shape} for model {model_path}"
             )
         
         if actual_output_shape != expected_output_shape:
             raise ValueError(
                 f"DistortionNet output shape mismatch: expected {expected_output_shape}, "
-                f"got {actual_output_shape}"
+                f"got {actual_output_shape} for model {model_path}"
             )
     
     def __call__(self, video_patches):
@@ -167,6 +178,8 @@ class DistortionNetTFLite:
         
         Args:
             video_patches: numpy array of shape (batch * 9, 360, 640, 3) in range [-1, 1]
+                           For batch=9 model: processes all 9 patches at once
+                           For 3-patch model: splits into 3 rows and aggregates
         
         Returns:
             features: numpy array of shape (batch, 24, 24, 128)
@@ -174,27 +187,58 @@ class DistortionNetTFLite:
         # Ensure input is float32
         video_patches = video_patches.astype(np.float32)
         
-        # Process each frame (9 patches per frame)
-        num_patches = video_patches.shape[0]
-        batch_size = num_patches // 9
-        all_features = []
-        
-        for i in range(batch_size):
-            # Get 9 patches for this frame
-            patches = video_patches[i*9:(i+1)*9]
+        if self.use_3patch:
+            from .tflite_aggregation import split_patches_into_rows, aggregate_distortion_rows
             
-            # Set input tensor
-            self.interpreter.set_tensor(self.input_details[0]['index'], patches)
+            # Process each frame (9 patches per frame)
+            num_patches = video_patches.shape[0]
+            batch_size = num_patches // 9
+            all_features = []
             
-            # Run inference
-            self.interpreter.invoke()
+            for i in range(batch_size):
+                # Get 9 patches for this frame
+                patches = video_patches[i*9:(i+1)*9]
+                
+                # Split into 3 rows
+                row_patches_list = split_patches_into_rows(patches)
+                
+                # Process each row
+                row_outputs = []
+                for row_patches in row_patches_list:
+                    self.interpreter.set_tensor(self.input_details[0]['index'], row_patches)
+                    self.interpreter.invoke()
+                    row_output = self.interpreter.get_tensor(self.output_details[0]['index'])
+                    row_outputs.append(row_output)
+                
+                # Aggregate rows
+                features = aggregate_distortion_rows(row_outputs)
+                all_features.append(features)
             
-            # Get output tensor
-            features = self.interpreter.get_tensor(self.output_details[0]['index'])
-            all_features.append(features)
-        
-        # Concatenate all features
-        return np.concatenate(all_features, axis=0)
+            # Concatenate all features
+            return np.concatenate(all_features, axis=0)
+        else:
+            # Original batch-9 logic
+            # Process each frame (9 patches per frame)
+            num_patches = video_patches.shape[0]
+            batch_size = num_patches // 9
+            all_features = []
+            
+            for i in range(batch_size):
+                # Get 9 patches for this frame
+                patches = video_patches[i*9:(i+1)*9]
+                
+                # Set input tensor
+                self.interpreter.set_tensor(self.input_details[0]['index'], patches)
+                
+                # Run inference
+                self.interpreter.invoke()
+                
+                # Get output tensor
+                features = self.interpreter.get_tensor(self.output_details[0]['index'])
+                all_features.append(features)
+            
+            # Concatenate all features
+            return np.concatenate(all_features, axis=0)
 
 
 class AggregationNetTFLite:
@@ -293,7 +337,8 @@ class UVQ1p5TFLite:
         content_model_path=None,
         distortion_model_path=None,
         aggregation_model_path=None,
-        use_quantized=False
+        use_quantized=False,
+        use_3patch_distortion=False
     ):
         """Initialize UVQ 1.5 TFLite model.
         
@@ -302,8 +347,11 @@ class UVQ1p5TFLite:
             distortion_model_path: Path to DistortionNet TFLite model
             aggregation_model_path: Path to AggregationNet TFLite model
             use_quantized: If True, use INT8 quantized models (_int8.tflite)
+            use_3patch_distortion: If True, use 3-patch DistortionNet model with
+                                   application-side aggregation (lower memory usage)
         """
         self.use_quantized = use_quantized
+        self.use_3patch_distortion = use_3patch_distortion
         
         # Auto-detect quantized models if use_quantized=True and paths not provided
         if use_quantized:
@@ -324,18 +372,19 @@ class UVQ1p5TFLite:
                 )
         
         model_type = "INT8 Quantized" if use_quantized else "FLOAT32"
-        print(f"Loading UVQ 1.5 TFLite models ({model_type})...")
+        distortion_type = "3-patch" if use_3patch_distortion else "batch-9"
+        print(f"Loading UVQ 1.5 TFLite models ({model_type}, DistortionNet: {distortion_type})...")
         
         self.content_net = ContentNetTFLite(content_model_path)
         print("  ✓ ContentNet loaded")
         
-        self.distortion_net = DistortionNetTFLite(distortion_model_path)
-        print("  ✓ DistortionNet loaded")
+        self.distortion_net = DistortionNetTFLite(distortion_model_path, use_3patch=use_3patch_distortion)
+        print(f"  ✓ DistortionNet loaded ({distortion_type})")
         
         self.aggregation_net = AggregationNetTFLite(aggregation_model_path)
         print("  ✓ AggregationNet loaded")
         
-        print(f"UVQ 1.5 TFLite models ready! ({model_type})")
+        print(f"UVQ 1.5 TFLite models ready! ({model_type}, DistortionNet: {distortion_type})")
     
     def preprocess_frame_for_content(self, frame):
         """Preprocess frame for ContentNet (resize to 256x256).
