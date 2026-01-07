@@ -153,7 +153,7 @@ class DistortionNetTFLite:
         # Using TensorFlow format: [B, H, W, C]
         if self.use_3patch:
             expected_input_shape = [3, 360, 640, 3]
-            expected_output_shape = [1, 8, 24, 128]
+            expected_output_shape = [3, 8, 8, 128]  # Individual patches, not aggregated
         else:
             expected_input_shape = [9, 360, 640, 3]
             expected_output_shape = [1, 24, 24, 128]
@@ -188,7 +188,7 @@ class DistortionNetTFLite:
         video_patches = video_patches.astype(np.float32)
         
         if self.use_3patch:
-            from .tflite_aggregation import split_patches_into_rows, aggregate_distortion_rows
+            from .tflite_aggregation import split_patches_into_rows, aggregate_row_patches, aggregate_distortion_rows
             
             # Process each frame (9 patches per frame)
             num_patches = video_patches.shape[0]
@@ -205,12 +205,18 @@ class DistortionNetTFLite:
                 # Process each row
                 row_outputs = []
                 for row_patches in row_patches_list:
+                    # Run inference - output is [3, 8, 8, 128] (individual patches)
                     self.interpreter.set_tensor(self.input_details[0]['index'], row_patches)
                     self.interpreter.invoke()
-                    row_output = self.interpreter.get_tensor(self.output_details[0]['index'])
+                    row_patch_features = self.interpreter.get_tensor(self.output_details[0]['index'])
+                    
+                    # Aggregate 3 patches horizontally using 4D operations
+                    # [3, 8, 8, 128] -> [1, 8, 24, 128]
+                    row_output = aggregate_row_patches(row_patch_features)
                     row_outputs.append(row_output)
                 
-                # Aggregate rows
+                # Aggregate 3 rows vertically
+                # 3 x [1, 8, 24, 128] -> [1, 24, 24, 128]
                 features = aggregate_distortion_rows(row_outputs)
                 all_features.append(features)
             

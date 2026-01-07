@@ -66,6 +66,45 @@ def split_patches_into_rows(patches: np.ndarray) -> list[np.ndarray]:
     return [row1_patches, row2_patches, row3_patches]
 
 
+def aggregate_row_patches(row_patches: np.ndarray) -> np.ndarray:
+    """Aggregate 3 patch features horizontally into a single row.
+    
+    This function takes 3 individual patch features and aggregates them
+    horizontally using 4D operations to match PyTorch's aggregation logic.
+    
+    Args:
+        row_patches: A numpy array of shape (3, 8, 8, 128) representing
+                     3 patch features from a single row.
+    
+    Returns:
+        A numpy array of shape (1, 8, 24, 128) representing the horizontally
+        aggregated row features.
+    
+    Raises:
+        ValueError: If the input does not have exactly 3 patches.
+    
+    Example:
+        >>> patches = np.random.randn(3, 8, 8, 128)
+        >>> row = aggregate_row_patches(patches)
+        >>> row.shape
+        (1, 8, 24, 128)
+    """
+    if row_patches.shape[0] != 3:
+        raise ValueError(f"Expected 3 patches, but got {row_patches.shape[0]}")
+    
+    # Aggregate 3 patches horizontally using 4D operations
+    # Input: [3, 8, 8, 128]
+    # Output: [1, 8, 24, 128]
+    
+    # Transpose to [8, 3, 8, 128] - move patch dimension to middle
+    features = np.transpose(row_patches, (1, 0, 2, 3))
+    
+    # Reshape to [1, 8, 24, 128] - flatten patch and width dimensions
+    features = features.reshape(1, 8, 24, 128)
+    
+    return features
+
+
 def aggregate_distortion_rows(row_outputs: list[np.ndarray]) -> np.ndarray:
     """Aggregate 3 row outputs from the 3-patch DistortionNet model into a single feature map.
     
