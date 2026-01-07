@@ -17,36 +17,51 @@ Choose the appropriate model based on your requirements:
 - Use **FLOAT32** (`distortion_net.tflite`) for development and validation
 - Use **INT8** (`distortion_net_int8.tflite`) for production deployment
 
-### Batch-9 vs 3-Patch Models
+### Batch-9 vs 9-Patch vs 3-Patch Models
 
 Choose the DistortionNet variant based on your hardware constraints:
 
-| Model | Input Shape | Output Shape | Use Case |
-|-------|-------------|--------------|----------|
-| **distortion_net.tflite** | [9, 360, 640, 3] | [1, 24, 24, 128] | Standard (processes all 9 patches at once) |
-| **distortion_net_3patch.tflite** | [3, 360, 640, 3] | [1, 8, 24, 128] | Memory-constrained HW (processes 1 row at a time) |
+| Model | Input Shape | Output Shape | Aggregation | Use Case |
+|-------|-------------|--------------|-------------|----------|
+| **distortion_net.tflite** | [9, 360, 640, 3] | [1, 24, 24, 128] | In-model (4D) | Standard (aggregation in TFLite) |
+| **distortion_net_9patch.tflite** | [9, 360, 640, 3] | [9, 8, 8, 128] | Application (5D) | Single call, app-side aggregation |
+| **distortion_net_3patch.tflite** | [3, 360, 640, 3] | [3, 8, 8, 128] | Application (4D) | Memory-constrained (3 calls) |
+
+**9-Patch Model Benefits**:
+- Single inference call (processes all 9 patches at once)
+- Aggregation done in application code using 5D operations
+- Perfectly matches batch-9 model output
+- Useful if you need access to individual patch features
+- Same memory usage as batch-9 model
 
 **3-Patch Model Benefits**:
 - Lower peak memory usage (processes 3 patches instead of 9)
-- Same final output after aggregation
+- Aggregation done in application code using 4D operations
 - Slightly higher latency (3 sequential calls vs 1 call)
 - Suitable for hardware with limited memory bandwidth
 
 **Usage**:
 ```python
-# Use 3-patch model
+# Use 9-patch model (single call, app-side aggregation)
 from uvq1p5_pytorch.utils.uvq1p5_tflite import UVQ1p5TFLite
 
+uvq_model = UVQ1p5TFLite(use_9patch_distortion=True)
+
+# Use 3-patch model (3 calls, app-side aggregation)
 uvq_model = UVQ1p5TFLite(use_3patch_distortion=True)
 ```
 
-**How it works**:
-The 3-patch model processes one row of the 3x3 patch grid at a time:
-1. Split 9 patches into 3 rows (patches 0-2, 3-5, 6-8)
-2. Process each row through the model (output: [1, 8, 24, 128])
-3. Concatenate the 3 row outputs vertically to get [1, 24, 24, 128]
+**How 9-patch works**:
+1. Process all 9 patches in one call (output: [9, 8, 8, 128])
+2. Aggregate using 5D operations in application code to get [1, 24, 24, 128]
 
-This aggregation happens automatically in the `DistortionNetTFLite` class when `use_3patch=True`.
+**How 3-patch works**:
+1. Split 9 patches into 3 rows (patches 0-2, 3-5, 6-8)
+2. Process each row through the model (output: [3, 8, 8, 128])
+3. Aggregate each row horizontally using 4D operations (output: [1, 8, 24, 128])
+4. Concatenate the 3 row outputs vertically to get [1, 24, 24, 128]
+
+This aggregation happens automatically in the `DistortionNetTFLite` class when `use_9patch=True` or `use_3patch=True`.
 
 ## Python Usage
 
@@ -244,8 +259,9 @@ All models are located in:
 ~/work/UVQ/uvq/models/tflite_models/uvq1.5/
 ├── content_net.tflite                # ContentNet FLOAT32 (14.55 MB)
 ├── content_net_int8.tflite           # ContentNet INT8
-├── distortion_net.tflite             # DistortionNet FLOAT32 batch-9 (14.53 MB)
-├── distortion_net_3patch.tflite      # DistortionNet FLOAT32 3-patch (14.54 MB)
+├── distortion_net.tflite             # DistortionNet FLOAT32 batch-9 (14.53 MB) - aggregation in model
+├── distortion_net_9patch.tflite      # DistortionNet FLOAT32 9-patch (14.54 MB) - app-side aggregation
+├── distortion_net_3patch.tflite      # DistortionNet FLOAT32 3-patch (14.54 MB) - app-side aggregation
 ├── distortion_net_int8.tflite        # DistortionNet INT8 batch-9 (4.25 MB)
 ├── aggregation_net.tflite            # AggregationNet FLOAT32 (0.30 MB)
 ├── aggregation_net_int8.tflite       # AggregationNet INT8
@@ -253,11 +269,12 @@ All models are located in:
 └── distortion_net_int8_6d.tflite     # Old INT8 6D version (reference only)
 ```
 
-**Recommended Models for BSTM Hardware**:
-- Standard: `distortion_net.tflite` (batch-9)
-- Memory-constrained: `distortion_net_3patch.tflite` (3-patch with application-side aggregation)
+**Recommended Models**:
+- **Standard**: `distortion_net.tflite` (batch-9, aggregation in model)
+- **App-side aggregation (single call)**: `distortion_net_9patch.tflite` (9-patch, 5D aggregation in app)
+- **Memory-constrained**: `distortion_net_3patch.tflite` (3-patch, 4D aggregation in app)
 
-**Note**: The `*_6d.tflite` models use 6D tensors and are kept for reference only. Do not use them on BSTM hardware.
+**Note**: The `*_6d.tflite` models use 6D tensors and are kept for reference only.
 
 ## See Also
 

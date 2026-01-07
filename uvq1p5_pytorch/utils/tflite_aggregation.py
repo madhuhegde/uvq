@@ -145,3 +145,56 @@ def aggregate_distortion_rows(row_outputs: list[np.ndarray]) -> np.ndarray:
     
     return aggregated_features
 
+
+def aggregate_9patch_features(patch_features: np.ndarray) -> np.ndarray:
+    """Aggregate 9 individual patch features into a 3x3 grid using 5D operations.
+    
+    This function takes 9 individual patch features and aggregates them into a
+    single spatial grid matching PyTorch's 3x3 aggregation logic. The aggregation
+    uses 5D operations (no batch dimension) to avoid 6D tensors.
+    
+    Args:
+        patch_features: A numpy array of shape (9, 8, 8, 128) representing
+                        9 individual patch features from a 3x3 grid.
+    
+    Returns:
+        A numpy array of shape (1, 24, 24, 128) representing the fully
+        aggregated feature map.
+    
+    Raises:
+        ValueError: If the input does not have exactly 9 patches.
+    
+    Example:
+        >>> patches = np.random.randn(9, 8, 8, 128)
+        >>> aggregated = aggregate_9patch_features(patches)
+        >>> aggregated.shape
+        (1, 24, 24, 128)
+    
+    Notes:
+        This aggregation matches PyTorch's 6D logic but uses 5D tensors:
+        - PyTorch: reshape([1,3,3,8,8,128]) -> permute(0,1,3,2,4,5) -> reshape([1,24,24,128])
+        - This:    reshape([3,3,8,8,128]) -> transpose(0,2,1,3,4) -> reshape([1,24,24,128])
+        
+        The 5D approach skips the batch dimension since we always process batch=1.
+    """
+    if patch_features.shape != (9, 8, 8, 128):
+        raise ValueError(f"Expected input shape (9, 8, 8, 128), but got {patch_features.shape}")
+    
+    # Step 1: Reshape [9, 8, 8, 128] -> [3, 3, 8, 8, 128]
+    # Groups into 3 rows of 3 patches: [0,1,2], [3,4,5], [6,7,8]
+    features = patch_features.reshape(3, 3, 8, 8, 128)
+    
+    # Step 2: Transpose [3, 3, 8, 8, 128] -> [3, 8, 3, 8, 128]
+    # Interleaves dimensions: [rows, patch_h, cols, patch_w, channels]
+    # This matches PyTorch's permute(0, 1, 3, 2, 4, 5) on 6D tensor
+    features = np.transpose(features, (0, 2, 1, 3, 4))
+    
+    # Step 3: Reshape [3, 8, 3, 8, 128] -> [1, 24, 24, 128]
+    # Flattens the spatial dimensions:
+    # - rows * patch_h = 3 * 8 = 24 (height)
+    # - cols * patch_w = 3 * 8 = 24 (width)
+    features = features.reshape(1, 24, 24, 128)
+    
+    return features
+
+
