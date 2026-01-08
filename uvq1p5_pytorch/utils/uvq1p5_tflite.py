@@ -415,9 +415,16 @@ class UVQ1p5TFLite:
                     "tflite_models", "uvq1.5", "content_net_int8.tflite"
                 )
             if distortion_model_path is None:
+                # Select the appropriate INT8 distortion model
+                if use_9patch_distortion:
+                    model_name = "distortion_net_9patch_int8.tflite"
+                elif use_3patch_distortion:
+                    model_name = "distortion_net_3patch_int8.tflite"
+                else:
+                    model_name = "distortion_net_int8.tflite"
                 distortion_model_path = os.path.join(
                     os.path.dirname(__file__), "..", "..", "models",
-                    "tflite_models", "uvq1.5", "distortion_net_int8.tflite"
+                    "tflite_models", "uvq1.5", model_name
                 )
             if aggregation_model_path is None:
                 aggregation_model_path = os.path.join(
